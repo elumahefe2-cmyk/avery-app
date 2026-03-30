@@ -5,6 +5,8 @@ _Last updated: 2026-03-30 UTC_
 ## Goal
 Build a repeatable content engine for OpenTXT that turns market research into production-ready short-form video briefs, then hands those briefs to n8n for automated video generation.
 
+The system should support multiple videos targeting specific customer segments and personas rather than only broad market creative.
+
 This system is designed to help OpenTXT grow by producing a high volume of relevant, high-conviction marketing videos informed by real market behavior rather than generic AI brainstorming.
 
 ---
@@ -46,6 +48,7 @@ Responsible for turning research into production-ready video concepts.
 - Receive a Research Packet from the Growth Research Agent.
 - Select the strongest opportunities based on OpenTXT relevance and likely conversion impact.
 - Generate 40–80 second short-form video ideas.
+- Create multiple targeted concepts aimed at specific customer segments, personas, or pain profiles when requested.
 - Organize each idea into a production-ready creative brief.
 - Send the selected brief to n8n through webhook once approved for testing/production.
 - Receive generated outputs back from the automation pipeline for review and next-step handling.
@@ -262,8 +265,10 @@ The Research Agent should separate:
 2. Update the manual control board to reflect the new media workflow.
 3. Create a reusable prompt/spec for the Growth Research Agent.
 4. Create a reusable prompt/spec for the Media Agent.
-5. Test the n8n webhook with a small sample payload when Jacomo is ready.
-6. Add a content-log file so every created video concept is tracked.
+5. Add automation-ready task templates with strict JSON output requirements.
+6. Support multi-video batches targeted at specific customer segments/personas.
+7. Test the n8n webhook with a small sample payload when Jacomo is ready.
+8. Add a content-log file so every created video concept is tracked.
 
 ---
 
