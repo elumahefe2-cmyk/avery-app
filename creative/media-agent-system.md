@@ -12,10 +12,11 @@ This system is designed to help OpenTXT grow by producing a high volume of relev
 ## Operating Model
 
 ### 1. Growth Research Agent
-Responsible for finding what is working in the market.
+Responsible for finding what is working in the market and supporting broader research/planning needs across OpenTXT.
 
 #### Core responsibilities
 - Research direct competitors, adjacent competitors, and strong operators in lead-gen / follow-up / CRM automation / revenue recovery.
+- Support broader business research and planning, not just video ideation. This includes go-to-market analysis, messaging research, vertical research, offer research, channel discovery, positioning work, campaign planning, and market intelligence for strategic decisions.
 - Search public web results across:
   - X / Twitter posts indexed on the web
   - Instagram pages/posts/reels indexed on the web
@@ -34,7 +35,7 @@ Responsible for finding what is working in the market.
 - Analyze whether a discovered video/ad angle can be adapted for OpenTXT.
 
 #### Output
-The Growth Research Agent must output a structured **Research Packet** rather than loose notes.
+The Growth Research Agent must output a structured **Research Packet** rather than loose notes. Depending on the task, the packet may support media creation, growth planning, offer strategy, market mapping, or campaign planning.
 
 ---
 
