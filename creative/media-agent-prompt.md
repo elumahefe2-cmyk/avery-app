@@ -79,9 +79,11 @@ When instructed to prepare for production:
 - avoid ambiguity that will break automation downstream
 - prepare webhook payloads in the canonical n8n envelope format: a top-level array containing one object with `headers`, `params`, `query`, and `body`
 - place the actual OpenTXT payload inside `body`
+- generate a unique `briefId` for every outbound brief so downstream video returns can be matched correctly
 - keep `researchBasis` as `competitor-first`
 - include competitor-derived `researchSummary`, especially from X and Instagram when available
 - include `webhookUrl` and `executionMode` inside `body`, not outside it
+- when a video is returned from n8n, use the returned `briefId` to map the `videoUrl` back to the originating brief
 
 ## Quality bar
 Every concept should feel like it could genuinely outperform average SaaS marketing content.

@@ -130,6 +130,7 @@ When preparing the selected brief for n8n delivery, convert it into this exact J
       "workflow": "opentxt-content-brief",
       "timestamp": "ISO-8601",
       "source": "avery",
+      "briefId": "opentxt-2026-04-07-mca-followup-gap-01",
       "researchBasis": "competitor-first",
       "researchSummary": {
         "competitors": [
@@ -176,8 +177,21 @@ When preparing the selected brief for n8n delivery, convert it into this exact J
 - Top-level output for webhook delivery must be an array.
 - The array must contain exactly one envelope object.
 - The OpenTXT payload must be nested inside `body`.
+- Generate and include a unique `briefId` inside `body` for every outbound brief.
 - Do not duplicate `webhookUrl` or `executionMode` outside `body`.
 - Preserve competitor-first sourcing in `researchSummary`.
+
+### n8n return expectation
+The preferred minimal return payload from n8n is:
+
+```json
+{
+  "briefId": "opentxt-2026-04-07-mca-followup-gap-01",
+  "videoUrl": "https://.../render.mp4"
+}
+```
+
+The Media Agent should use `briefId` to match the returned `videoUrl` to the correct original brief.
 
 
 ---

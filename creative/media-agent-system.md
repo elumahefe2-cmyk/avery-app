@@ -210,6 +210,7 @@ The Media Agent must send the n8n payload in the **exact webhook envelope shape*
       "workflow": "opentxt-content-brief",
       "timestamp": "ISO-8601",
       "source": "avery",
+      "briefId": "opentxt-2026-04-07-mca-followup-gap-01",
       "researchBasis": "competitor-first",
       "researchSummary": {
         "competitors": [
@@ -258,6 +259,8 @@ The Media Agent must send the n8n payload in the **exact webhook envelope shape*
 - Do **not** put the brief at the top level.
 - Do **not** omit the array wrapper.
 - Do **not** duplicate `webhookUrl` or `executionMode` outside `body`.
+- Every outbound webhook payload must include a generated `briefId` inside `body`.
+- `briefId` should be unique and human-readable enough to trace, ideally using a slug-like pattern such as `opentxt-YYYY-MM-DD-topic-01`.
 - `researchBasis` must remain `competitor-first` for content-generation requests.
 - Research inputs should be derived from competitor analysis, especially X and Instagram, per operating directive.
 - `body.brief` should stay concise, structured, and automation-safe.
@@ -287,8 +290,20 @@ When the Media Agent produces an internal brief batch, convert the selected brie
 
 ### Phase 4 — Production
 9. n8n generates the video.
-10. n8n returns render/output metadata.
-11. Media Agent reviews and prepares next action (revision, approval, posting prep).
+10. n8n returns the generated video URL plus the matching `briefId`.
+11. Media Agent matches the returned asset to the originating brief via `briefId`, logs it, and prepares next action (revision, approval, posting prep).
+
+### n8n return contract
+The minimal return payload from n8n should be:
+
+```json
+{
+  "briefId": "opentxt-2026-04-07-mca-followup-gap-01",
+  "videoUrl": "https://.../render.mp4"
+}
+```
+
+If n8n returns only a `videoUrl` with no `briefId`, the Media Agent cannot reliably determine which brief the asset belongs to when multiple renders are in flight.
 
 ---
 
