@@ -188,40 +188,84 @@ The Research Agent should separate:
 
 ## Webhook Payload Schema (Media Agent -> n8n)
 
+The Media Agent must send the n8n payload in the **exact webhook envelope shape** expected by n8n test/production webhook executions:
+- top-level value must be an **array**
+- array must contain **one object**
+- object must contain these keys exactly: `headers`, `params`, `query`, `body`
+- the actual OpenTXT content payload must live inside `body`
+
+### Canonical envelope
+
 ```json
-{
-  "event": "generate_marketing_video",
-  "environment": "test",
-  "brand": "OpenTXT",
-  "brief": {
-    "briefId": "uuid-or-slug",
-    "conceptTitle": "string",
-    "durationSeconds": 40,
-    "targetPersona": "string",
-    "marketSegment": "string",
-    "platformTarget": ["instagram", "x"],
-    "hook": "string",
-    "coreMessage": "string",
-    "cta": "string",
-    "tone": "string",
-    "sceneOutline": [],
-    "productionNotes": {},
-    "assetsNeeded": []
-  },
-  "sourceResearchSummary": {
-    "researchId": "uuid-or-slug",
-    "topInsights": [],
-    "competitorsReviewed": [],
-    "referenceUrls": []
-  },
-  "returnInstructions": {
-    "deliverBackTo": "media-agent",
-    "includeRenderUrl": true,
-    "includeProjectFiles": false,
-    "includeMetadata": true
+[
+  {
+    "headers": {
+      "host": "n8n.srv992844.hstgr.cloud",
+      "user-agent": "avery-media-agent/1.0",
+      "content-type": "application/json"
+    },
+    "params": {},
+    "query": {},
+    "body": {
+      "workflow": "opentxt-content-brief",
+      "timestamp": "ISO-8601",
+      "source": "avery",
+      "researchBasis": "competitor-first",
+      "researchSummary": {
+        "competitors": [
+          {
+            "name": "string",
+            "url": "https://...",
+            "observations": ["string"]
+          }
+        ],
+        "patterns": ["string"],
+        "platformInsights": {
+          "instagram": ["string"],
+          "x": ["string"]
+        }
+      },
+      "brief": {
+        "brand": "OpenTXT",
+        "objective": "Create a short-form video ad/content asset for social distribution based on competitor-proven messaging patterns",
+        "targetAudience": "string",
+        "coreProblem": "string",
+        "coreMessage": "string",
+        "creativeDirection": {
+          "style": "string",
+          "avoid": ["string"],
+          "emphasize": ["string"]
+        },
+        "videoStructure": {
+          "hook": "string",
+          "problem": "string",
+          "solution": "string",
+          "cta": "string"
+        },
+        "deliverablesRequested": ["string"],
+        "platforms": ["Instagram", "X", "paid social"]
+      },
+      "webhookUrl": "https://n8n.srv992844.hstgr.cloud/webhook-test/...",
+      "executionMode": "test"
+    }
   }
-}
+]
 ```
+
+### Hard requirements
+
+- Do **not** send a bare object.
+- Do **not** put the brief at the top level.
+- Do **not** omit the array wrapper.
+- Do **not** duplicate `webhookUrl` or `executionMode` outside `body`.
+- `researchBasis` must remain `competitor-first` for content-generation requests.
+- Research inputs should be derived from competitor analysis, especially X and Instagram, per operating directive.
+- `body.brief` should stay concise, structured, and automation-safe.
+
+### Mapping rule
+
+When the Media Agent produces an internal brief batch, convert the selected brief into the canonical `body.brief` structure above before sending to n8n. Treat the envelope format shown here as the source of truth for webhook delivery, even if internal planning formats differ.
+
 
 ---
 

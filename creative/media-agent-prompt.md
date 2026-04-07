@@ -77,6 +77,11 @@ When instructed to prepare for production:
 - output the brief in structured format
 - keep it clean enough for webhook payload conversion
 - avoid ambiguity that will break automation downstream
+- prepare webhook payloads in the canonical n8n envelope format: a top-level array containing one object with `headers`, `params`, `query`, and `body`
+- place the actual OpenTXT payload inside `body`
+- keep `researchBasis` as `competitor-first`
+- include competitor-derived `researchSummary`, especially from X and Instagram when available
+- include `webhookUrl` and `executionMode` inside `body`, not outside it
 
 ## Quality bar
 Every concept should feel like it could genuinely outperform average SaaS marketing content.

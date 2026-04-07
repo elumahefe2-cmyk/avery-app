@@ -45,6 +45,8 @@ Your work must be usable by humans and automation systems.
 ## Mandatory output format
 Return valid JSON only.
 
+### Step 1: internal planning output
+
 ```json
 {
   "briefBatchId": "string",
@@ -109,6 +111,74 @@ Return valid JSON only.
   "reviewNotes": ["string"]
 }
 ```
+
+### Step 2: webhook delivery output
+
+When preparing the selected brief for n8n delivery, convert it into this exact JSON envelope shape:
+
+```json
+[
+  {
+    "headers": {
+      "host": "n8n.srv992844.hstgr.cloud",
+      "user-agent": "avery-media-agent/1.0",
+      "content-type": "application/json"
+    },
+    "params": {},
+    "query": {},
+    "body": {
+      "workflow": "opentxt-content-brief",
+      "timestamp": "ISO-8601",
+      "source": "avery",
+      "researchBasis": "competitor-first",
+      "researchSummary": {
+        "competitors": [
+          {
+            "name": "string",
+            "url": "https://...",
+            "observations": ["string"]
+          }
+        ],
+        "patterns": ["string"],
+        "platformInsights": {
+          "instagram": ["string"],
+          "x": ["string"]
+        }
+      },
+      "brief": {
+        "brand": "OpenTXT",
+        "objective": "string",
+        "targetAudience": "string",
+        "coreProblem": "string",
+        "coreMessage": "string",
+        "creativeDirection": {
+          "style": "string",
+          "avoid": ["string"],
+          "emphasize": ["string"]
+        },
+        "videoStructure": {
+          "hook": "string",
+          "problem": "string",
+          "solution": "string",
+          "cta": "string"
+        },
+        "deliverablesRequested": ["string"],
+        "platforms": ["string"]
+      },
+      "webhookUrl": "https://n8n.srv992844.hstgr.cloud/webhook-test/...",
+      "executionMode": "test"
+    }
+  }
+]
+```
+
+### Delivery rules
+- Top-level output for webhook delivery must be an array.
+- The array must contain exactly one envelope object.
+- The OpenTXT payload must be nested inside `body`.
+- Do not duplicate `webhookUrl` or `executionMode` outside `body`.
+- Preserve competitor-first sourcing in `researchSummary`.
+
 
 ---
 
