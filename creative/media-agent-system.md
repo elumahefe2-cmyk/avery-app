@@ -299,11 +299,13 @@ The minimal return payload from n8n should be:
 ```json
 {
   "briefId": "opentxt-2026-04-07-mca-followup-gap-01",
-  "videoUrl": "https://.../render.mp4"
+  "video_url": "https://.../render.mp4"
 }
 ```
 
-If n8n returns only a `videoUrl` with no `briefId`, the Media Agent cannot reliably determine which brief the asset belongs to when multiple renders are in flight.
+`videoUrl` is also acceptable if n8n is configured that way, but `video_url` is now the observed working return field from the live test.
+
+If n8n returns only a video URL with no `briefId`, the Media Agent cannot reliably determine which brief the asset belongs to when multiple renders are in flight.
 
 ---
 
@@ -335,3 +337,4 @@ If n8n returns only a `videoUrl` with no `briefId`, the Media Agent cannot relia
 - The current webhook URL is a **test** endpoint and must be armed manually before testing.
 - Early-stage mode should favor review + approval before full automation.
 - This system should optimize for business growth, not content volume alone.
+- Live test validated on 2026-04-07: competitor-first MCA brief sent to n8n, `briefId` preserved, and n8n returned a matching `briefId` plus `video_url`, which was then downloaded locally.
