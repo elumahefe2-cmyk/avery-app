@@ -417,14 +417,21 @@ function ChatApp() {
     return text.replace(/^['"`]+|['"`]+$/g, '').trim() || 'New chat'
   }
 
-  const generateConversationTitle = async (message: string) => {
+  const generateConversationTitle = async (
+    firstMessage: string,
+    userId: string,
+    sessionId: string,
+  ) => {
     const response = await fetch(TITLE_WEBHOOK, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        message,
+        message: firstMessage,
+        firstMessage,
+        userId,
+        sessionId,
       }),
     })
 
@@ -531,7 +538,7 @@ function ChatApp() {
       )
 
       if (!existingConversation) {
-        void generateConversationTitle(trimmed)
+        void generateConversationTitle(trimmed, currentUserId, currentConversationId)
           .then((generatedTitle) => {
             setConversations((current) =>
               current.map((conversation: Conversation) =>
