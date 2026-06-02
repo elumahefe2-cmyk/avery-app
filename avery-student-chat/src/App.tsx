@@ -20,6 +20,7 @@ type ChatMessage = {
   content: string
   timestamp: string
   isTyping?: boolean
+  attachments?: ChatAttachment[]
 }
 
 type Conversation = {
@@ -47,6 +48,17 @@ type HistoryApiItem = {
     timestamp?: string
     createdAt?: string
   }>
+}
+
+type ChatAttachment = {
+  id: string
+  name: string
+  size: number
+  type: string
+}
+
+type ComposerAttachment = ChatAttachment & {
+  file: File
 }
 
 const SEND_WEBHOOK =
@@ -164,9 +176,51 @@ function normalizeMessages(rawMessages: HistoryApiItem['messages'] = []): ChatMe
   }))
 }
 
+function formatFileSize(size: number) {
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function AttachmentList({
+  attachments,
+  onRemove,
+}: {
+  attachments: ChatAttachment[]
+  onRemove?: (attachmentId: string) => void
+}) {
+  return (
+    <div className="attachment-list">
+      {attachments.map((attachment) => (
+        <div className="attachment-chip" key={attachment.id}>
+          <div className="attachment-meta">
+            <span className="attachment-name">{attachment.name}</span>
+            <span className="attachment-size">{formatFileSize(attachment.size)}</span>
+          </div>
+          {onRemove ? (
+            <button
+              className="attachment-remove"
+              type="button"
+              onClick={() => onRemove(attachment.id)}
+              aria-label={`Remove ${attachment.name}`}
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function ChatMessageContent({ message }: { message: ChatMessage }) {
   if (message.role === 'user') {
-    return <p>{message.content}</p>
+    return (
+      <div className="user-message-content">
+        {message.attachments?.length ? <AttachmentList attachments={message.attachments} /> : null}
+        {message.content ? <p>{message.content}</p> : null}
+      </div>
+    )
   }
 
   return (
@@ -191,8 +245,10 @@ function ChatApp() {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [lastExpandedSidebarWidth, setLastExpandedSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
+  const [selectedAttachments, setSelectedAttachments] = useState<ComposerAttachment[]>([])
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const messagesScrollRef = useRef<HTMLDivElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -507,8 +563,16 @@ function ChatApp() {
 
   const submitMessage = async () => {
     const trimmed = input.trim()
+    const serializedAttachments = selectedAttachments.map(({ file: _file, ...attachment }) => attachment)
+    const fallbackAttachmentMessage =
+      serializedAttachments.length > 0
+        ? `Attached file${serializedAttachments.length === 1 ? '' : 's'}: ${serializedAttachments
+            .map((attachment) => attachment.name)
+            .join(', ')}`
+        : ''
+    const messageToSend = trimmed || fallbackAttachmentMessage
 
-    if (!trimmed || isSending || isGuestBlocked) return
+    if ((!messageToSend && !serializedAttachments.length) || isSending || isGuestBlocked) return
 
     const currentUserId = user?.id ?? 'guest'
     const existingConversation = activeConversation
@@ -522,6 +586,7 @@ function ChatApp() {
       role: 'user',
       content: trimmed,
       timestamp: new Date().toISOString(),
+      attachments: serializedAttachments,
     }
 
     const typingMessage: ChatMessage = {
@@ -548,6 +613,10 @@ function ChatApp() {
     })
     setMessages((current) => [...current.filter((message) => !message.isTyping), userMessage, typingMessage])
     setInput('')
+    setSelectedAttachments([])
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
 
     if (!isSignedIn) {
       setGuestMessageCount((current) => current + 1)
@@ -562,7 +631,8 @@ function ChatApp() {
         body: JSON.stringify({
           userId: currentUserId,
           sessionId: currentConversationId,
-          message: trimmed,
+          message: messageToSend,
+          attachments: serializedAttachments,
         }),
       })
 
@@ -600,7 +670,7 @@ function ChatApp() {
       )
 
       if (!existingConversation) {
-        void generateConversationTitle(trimmed, currentUserId, currentConversationId)
+        void generateConversationTitle(messageToSend, currentUserId, currentConversationId)
           .then((generatedTitle) => {
             setConversations((current) =>
               current.map((conversation: Conversation) =>
@@ -646,6 +716,48 @@ function ChatApp() {
     setMessages([])
     setChatError('')
     setInput('')
+    setSelectedAttachments([])
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
+  }
+
+  const handleAttachmentButtonClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleAttachmentSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? [])
+    if (!files.length) return
+
+    setSelectedAttachments((current) => {
+      const seen = new Set(current.map((attachment) => `${attachment.name}:${attachment.size}:${attachment.file.lastModified}`))
+      const nextAttachments = [...current]
+
+      files.forEach((file) => {
+        const fingerprint = `${file.name}:${file.size}:${file.lastModified}`
+        if (seen.has(fingerprint)) return
+
+        seen.add(fingerprint)
+        nextAttachments.push({
+          id: crypto.randomUUID(),
+          name: file.name,
+          size: file.size,
+          type: file.type,
+          file,
+        })
+      })
+
+      return nextAttachments
+    })
+
+    event.target.value = ''
+  }
+
+  const handleRemoveAttachment = (attachmentId: string) => {
+    setSelectedAttachments((current) =>
+      current.filter((attachment) => attachment.id !== attachmentId),
+    )
   }
 
   const handleToggleSidebar = () => {
@@ -800,6 +912,20 @@ function ChatApp() {
             {chatError && <p className="status-text error-text">{chatError}</p>}
             <form className="composer" onSubmit={handleSendMessage}>
               <div className={`composer-input-wrap ${isGuestBlocked ? 'composer-disabled' : ''}`}>
+                <input
+                  ref={fileInputRef}
+                  className="composer-file-input"
+                  type="file"
+                  multiple
+                  onChange={handleAttachmentSelection}
+                  disabled={isGuestBlocked}
+                />
+                {selectedAttachments.length ? (
+                  <AttachmentList
+                    attachments={selectedAttachments}
+                    onRemove={handleRemoveAttachment}
+                  />
+                ) : null}
                 <textarea
                   ref={textareaRef}
                   value={input}
@@ -816,7 +942,13 @@ function ChatApp() {
                   disabled={isGuestBlocked}
                 />
                 <div className="composer-row">
-                  <button className="composer-plus" type="button" aria-label="Add attachment" disabled={isGuestBlocked}>
+                  <button
+                    className="composer-plus"
+                    type="button"
+                    aria-label="Add attachment"
+                    onClick={handleAttachmentButtonClick}
+                    disabled={isGuestBlocked}
+                  >
                     +
                   </button>
                   <div className="composer-actions">
@@ -829,7 +961,7 @@ function ChatApp() {
                     <button
                       className="composer-send"
                       type="submit"
-                      disabled={isSending || !input.trim() || isGuestBlocked}
+                      disabled={isSending || (!input.trim() && !selectedAttachments.length) || isGuestBlocked}
                       aria-label="Send message"
                     >
                       ↑

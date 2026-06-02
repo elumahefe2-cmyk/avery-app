@@ -595,6 +595,10 @@ button {
   width: 100%;
 }
 
+.composer-file-input {
+  display: none;
+}
+
 .composer-input-wrap {
   width: 100%;
   border: 1px solid #2a2c30;
@@ -606,6 +610,75 @@ button {
 
 .composer-disabled {
   opacity: 0.65;
+}
+
+.attachment-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  padding: 8px 10px 8px 12px;
+  border: 1px solid #30333a;
+  border-radius: 14px;
+  background: #1d1f24;
+}
+
+.attachment-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.attachment-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #f3f3f3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-size {
+  font-size: 0.74rem;
+  color: #8f95a1;
+  white-space: nowrap;
+}
+
+.attachment-remove {
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  font-size: 0.95rem;
+  color: #d8dbe1;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.user-message-content {
+  display: grid;
+  gap: 8px;
+}
+
+.user-message-content .attachment-list {
+  margin-bottom: 0;
+}
+
+.chat-turn.user .attachment-chip {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.chat-turn.user .attachment-size {
+  color: rgba(255, 255, 255, 0.72);
 }
 
 .composer textarea {
@@ -654,6 +727,20 @@ button {
   background: transparent;
   color: #f5f5f5;
   font-size: 1.35rem;
+  transition:
+    background 160ms ease,
+    color 160ms ease,
+    transform 160ms ease;
+}
+
+.composer-plus:hover:not(:disabled),
+.attachment-remove:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.composer-plus:active:not(:disabled),
+.attachment-remove:active {
+  transform: scale(0.96);
 }
 
 .composer-actions {
@@ -829,6 +916,12 @@ button {
   .composer-input-wrap {
     border-radius: 22px;
     padding: 12px;
+  }
+
+  .attachment-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
   }
 
   .composer-actions {
