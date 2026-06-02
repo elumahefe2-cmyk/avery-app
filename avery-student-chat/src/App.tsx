@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent, KeyboardEvent } from 'react'
+import type { FormEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
@@ -60,6 +60,12 @@ const GUEST_STORAGE_KEY = 'avery-guest-message-count'
 const GUEST_LIMIT = 3
 const ACTIVE_CONVERSATION_STORAGE_KEY = 'avery-active-conversation-id'
 const DRAFT_CONVERSATIONS_STORAGE_KEY = 'avery-draft-conversations'
+const SIDEBAR_WIDTH_STORAGE_KEY = 'avery-sidebar-width'
+const SIDEBAR_COLLAPSED_STORAGE_KEY = 'avery-sidebar-collapsed'
+const SIDEBAR_MIN_WIDTH = 180
+const SIDEBAR_MAX_WIDTH = 420
+const SIDEBAR_DEFAULT_WIDTH = 228
+const SIDEBAR_COLLAPSED_WIDTH = 0
 
 function getGreeting(name: string) {
   const hour = new Date().getHours()
@@ -68,6 +74,10 @@ function getGreeting(name: string) {
   if (hour >= 12 && hour < 17) return `Good afternoon, ${name}`
   if (hour >= 17 && hour < 21) return `Good evening, ${name}`
   return `Good night, ${name}`
+}
+
+function clampSidebarWidth(width: number) {
+  return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width))
 }
 
 function AveryLogo({ className = '' }: { className?: string }) {
@@ -87,6 +97,16 @@ function AveryLogo({ className = '' }: { className?: string }) {
         strokeLinejoin="round"
       />
     </svg>
+  )
+}
+
+function SidebarToggleIcon({ collapsed }: { collapsed: boolean }) {
+  return (
+    <span className={`sidebar-toggle-icon ${collapsed ? 'collapsed' : ''}`} aria-hidden="true">
+      <span />
+      <span />
+      <span />
+    </span>
   )
 }
 
@@ -168,6 +188,9 @@ function ChatApp() {
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
   const [guestMessageCount, setGuestMessageCount] = useState(0)
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [lastExpandedSidebarWidth, setLastExpandedSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
@@ -194,6 +217,16 @@ function ChatApp() {
         console.error('Failed to parse saved draft conversations', error)
       }
     }
+
+    const savedSidebarWidth = Number(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) ?? SIDEBAR_DEFAULT_WIDTH)
+    const normalizedWidth = Number.isFinite(savedSidebarWidth)
+      ? clampSidebarWidth(savedSidebarWidth)
+      : SIDEBAR_DEFAULT_WIDTH
+    setSidebarWidth(normalizedWidth)
+    setLastExpandedSidebarWidth(normalizedWidth)
+
+    const savedCollapsed = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true'
+    setIsSidebarCollapsed(savedCollapsed)
   }, [])
 
   useEffect(() => {
@@ -217,6 +250,16 @@ function ChatApp() {
     const drafts = conversations.filter((conversation: Conversation) => conversation.messages?.length)
     window.localStorage.setItem(DRAFT_CONVERSATIONS_STORAGE_KEY, JSON.stringify(drafts))
   }, [conversations])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
+  }, [sidebarWidth])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(SIDEBAR_COLLAPSED_STORAGE_KEY, String(isSidebarCollapsed))
+  }, [isSidebarCollapsed])
 
   useEffect(() => {
     if (!isSignedIn || typeof window === 'undefined') return
@@ -590,12 +633,55 @@ function ChatApp() {
     setInput('')
   }
 
+  const handleToggleSidebar = () => {
+    if (isSidebarCollapsed) {
+      const restoredWidth = clampSidebarWidth(lastExpandedSidebarWidth || SIDEBAR_DEFAULT_WIDTH)
+      setSidebarWidth(restoredWidth)
+      setIsSidebarCollapsed(false)
+      return
+    }
+
+    setLastExpandedSidebarWidth(sidebarWidth)
+    setIsSidebarCollapsed(true)
+  }
+
+  const handleSidebarResizeStart = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const nextWidth = clampSidebarWidth(moveEvent.clientX - 56)
+      setSidebarWidth(nextWidth)
+      setLastExpandedSidebarWidth(nextWidth)
+      if (isSidebarCollapsed) {
+        setIsSidebarCollapsed(false)
+      }
+    }
+
+    const onPointerUp = () => {
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+    }
+
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+  }
+
+  const sidebarStyle = {
+    '--sidebar-width': `${isSidebarCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth}px`,
+  } as React.CSSProperties
+
   return (
     <>
-      <div className="claude-shell">
+      <div className={`claude-shell ${isSidebarCollapsed ? 'sidebar-collapsed' : ''}`} style={sidebarStyle}>
         <aside className="icon-rail">
-          <button className="rail-avatar rail-button" type="button" aria-label="Avery home">
-            <AveryLogo className="rail-logo" />
+          <button
+            className="rail-avatar rail-button sidebar-toggle-button"
+            type="button"
+            aria-label={isSidebarCollapsed ? 'Open sidebar' : 'Close sidebar'}
+            aria-expanded={!isSidebarCollapsed}
+            onClick={handleToggleSidebar}
+          >
+            <SidebarToggleIcon collapsed={isSidebarCollapsed} />
           </button>
           <div className="rail-stack">
             <button className="rail-button" type="button" onClick={handleStartNewChat} aria-label="New chat">
@@ -605,7 +691,11 @@ function ChatApp() {
               ○
             </button>
           </div>
-          <div className="rail-footer" />
+          <div className="rail-footer">
+            <button className="rail-button" type="button" aria-label="Avery home">
+              <AveryLogo className="rail-logo" />
+            </button>
+          </div>
         </aside>
 
         <aside className="sidebar">
@@ -637,6 +727,13 @@ function ChatApp() {
               </button>
             ))}
           </div>
+
+          <button
+            type="button"
+            className="sidebar-resizer"
+            aria-label="Resize sidebar"
+            onPointerDown={handleSidebarResizeStart}
+          />
         </aside>
 
         <main className="chat-stage">
