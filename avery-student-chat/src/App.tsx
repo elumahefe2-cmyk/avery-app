@@ -621,7 +621,7 @@ function ChatApp() {
           </button>
 
           <div className="conversation-list">
-            {historyError && <span className="status-text error-text">{historyError}</span>}
+            {historyError && <span className="sidebar-error">{historyError}</span>}
             {conversations.map((conversation: Conversation) => (
               <button
                 key={conversation.id}
