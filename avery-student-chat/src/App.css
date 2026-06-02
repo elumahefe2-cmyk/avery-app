@@ -619,6 +619,50 @@ button {
   margin-bottom: 10px;
 }
 
+.attachment-preview {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid #30333a;
+  border-radius: 18px;
+  background: #1d1f24;
+}
+
+.attachment-thumbnail {
+  width: 72px;
+  height: 72px;
+  border-radius: 14px;
+  object-fit: cover;
+  background: #111214;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.attachment-thumbnail-file {
+  display: grid;
+  place-items: center;
+}
+
+.attachment-preview-meta {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.attachment-preview-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.attachment-preview-details {
+  justify-content: flex-start;
+}
+
 .attachment-chip {
   display: inline-flex;
   align-items: center;
@@ -632,9 +676,36 @@ button {
 
 .attachment-meta {
   display: flex;
-  align-items: baseline;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   min-width: 0;
+}
+
+.attachment-icon {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.05);
+  color: #f3f3f3;
+}
+
+.attachment-icon span {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.attachment-icon-image {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(126, 144, 255, 0.18));
+}
+
+.attachment-icon-file {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(104, 198, 174, 0.16));
 }
 
 .attachment-name {
@@ -647,6 +718,12 @@ button {
 }
 
 .attachment-size {
+  font-size: 0.74rem;
+  color: #8f95a1;
+  white-space: nowrap;
+}
+
+.attachment-type {
   font-size: 0.74rem;
   color: #8f95a1;
   white-space: nowrap;
@@ -677,7 +754,16 @@ button {
   border-color: rgba(255, 255, 255, 0.16);
 }
 
+.chat-turn.user .attachment-icon {
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.14);
+}
+
 .chat-turn.user .attachment-size {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.chat-turn.user .attachment-type {
   color: rgba(255, 255, 255, 0.72);
 }
 
@@ -919,9 +1005,17 @@ button {
   }
 
   .attachment-meta {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 2px;
+    min-width: 0;
+  }
+
+  .attachment-preview {
+    grid-template-columns: 56px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .attachment-thumbnail {
+    width: 56px;
+    height: 56px;
   }
 
   .composer-actions {

@@ -55,10 +55,13 @@ type ChatAttachment = {
   name: string
   size: number
   type: string
+  kind: 'image' | 'file'
+  extension: string
 }
 
 type ComposerAttachment = ChatAttachment & {
   file: File
+  previewUrl?: string
 }
 
 const SEND_WEBHOOK =
@@ -78,6 +81,14 @@ const SIDEBAR_MIN_WIDTH = 180
 const SIDEBAR_MAX_WIDTH = 420
 const SIDEBAR_DEFAULT_WIDTH = 228
 const SIDEBAR_COLLAPSED_WIDTH = 0
+const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp'])
+const FILE_MIME_TYPES = new Set([
+  'application/pdf',
+  'text/plain',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+])
+const ALLOWED_ATTACHMENT_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'txt', 'docx'])
+const ATTACHMENT_ACCEPT = '.jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.docx,image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
 
 function getGreeting(name: string) {
   const hour = new Date().getHours()
@@ -182,6 +193,139 @@ function formatFileSize(size: number) {
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
+function getFileExtension(name: string) {
+  const segments = name.toLowerCase().split('.')
+  return segments.length > 1 ? segments.at(-1) ?? '' : ''
+}
+
+function isAllowedAttachment(file: File) {
+  const extension = getFileExtension(file.name)
+  return ALLOWED_ATTACHMENT_EXTENSIONS.has(extension) ||
+    IMAGE_MIME_TYPES.has(file.type) ||
+    FILE_MIME_TYPES.has(file.type)
+}
+
+function getAttachmentKind(file: Pick<File, 'type' | 'name'>): 'image' | 'file' {
+  if (IMAGE_MIME_TYPES.has(file.type)) return 'image'
+
+  const extension = getFileExtension(file.name)
+  return ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(extension) ? 'image' : 'file'
+}
+
+function normalizeAttachmentType(file: Pick<File, 'type' | 'name'>) {
+  if (file.type) return file.type
+
+  const extension = getFileExtension(file.name)
+
+  switch (extension) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg'
+    case 'png':
+      return 'image/png'
+    case 'gif':
+      return 'image/gif'
+    case 'webp':
+      return 'image/webp'
+    case 'pdf':
+      return 'application/pdf'
+    case 'txt':
+      return 'text/plain'
+    case 'docx':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    default:
+      return 'application/octet-stream'
+  }
+}
+
+function getAttachmentTypeLabel(attachment: Pick<ChatAttachment, 'type' | 'extension'>) {
+  if (attachment.extension) return attachment.extension.toUpperCase()
+  if (!attachment.type) return 'FILE'
+
+  const subtype = attachment.type.split('/')[1] ?? 'file'
+  return subtype.replace('vnd.openxmlformats-officedocument.wordprocessingml.document', 'DOCX').toUpperCase()
+}
+
+function revokeAttachmentPreview(attachment: ComposerAttachment | null) {
+  if (attachment?.previewUrl?.startsWith('blob:')) {
+    URL.revokeObjectURL(attachment.previewUrl)
+  }
+}
+
+async function fileToBase64(file: File) {
+  const dataUrl = await new Promise<string>((resolve, reject) => {
+    const reader = new FileReader()
+
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        resolve(reader.result)
+        return
+      }
+
+      reject(new Error('Could not read attachment as base64.'))
+    }
+
+    reader.onerror = () => {
+      reject(reader.error ?? new Error('Could not read attachment as base64.'))
+    }
+
+    reader.readAsDataURL(file)
+  })
+
+  return dataUrl.split(',')[1] ?? ''
+}
+
+function FileTypeIcon({ attachment }: { attachment: Pick<ChatAttachment, 'kind' | 'extension' | 'type'> }) {
+  const label = attachment.kind === 'image' ? 'IMG' : getAttachmentTypeLabel(attachment)
+
+  return (
+    <span className={`attachment-icon ${attachment.kind === 'image' ? 'attachment-icon-image' : 'attachment-icon-file'}`} aria-hidden="true">
+      <span>{label}</span>
+    </span>
+  )
+}
+
+function AttachmentPreview({
+  attachment,
+  onRemove,
+}: {
+  attachment: ComposerAttachment
+  onRemove: () => void
+}) {
+  return (
+    <div className="attachment-preview">
+      {attachment.kind === 'image' && attachment.previewUrl ? (
+        <img
+          className="attachment-thumbnail"
+          src={attachment.previewUrl}
+          alt={attachment.name}
+        />
+      ) : (
+        <div className="attachment-thumbnail attachment-thumbnail-file">
+          <FileTypeIcon attachment={attachment} />
+        </div>
+      )}
+      <div className="attachment-preview-meta">
+        <div className="attachment-preview-line">
+          <span className="attachment-name">{attachment.name}</span>
+          <button
+            className="attachment-remove"
+            type="button"
+            onClick={onRemove}
+            aria-label={`Remove ${attachment.name}`}
+          >
+            ×
+          </button>
+        </div>
+        <div className="attachment-preview-line attachment-preview-details">
+          <span className="attachment-size">{formatFileSize(attachment.size)}</span>
+          <span className="attachment-type">{getAttachmentTypeLabel(attachment)}</span>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function AttachmentList({
   attachments,
   onRemove,
@@ -193,9 +337,12 @@ function AttachmentList({
     <div className="attachment-list">
       {attachments.map((attachment) => (
         <div className="attachment-chip" key={attachment.id}>
+          <FileTypeIcon attachment={attachment} />
           <div className="attachment-meta">
             <span className="attachment-name">{attachment.name}</span>
-            <span className="attachment-size">{formatFileSize(attachment.size)}</span>
+            <span className="attachment-size">
+              {getAttachmentTypeLabel(attachment)} · {formatFileSize(attachment.size)}
+            </span>
           </div>
           {onRemove ? (
             <button
@@ -245,7 +392,7 @@ function ChatApp() {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [lastExpandedSidebarWidth, setLastExpandedSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
-  const [selectedAttachments, setSelectedAttachments] = useState<ComposerAttachment[]>([])
+  const [selectedAttachment, setSelectedAttachment] = useState<ComposerAttachment | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const messagesScrollRef = useRef<HTMLDivElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -488,6 +635,10 @@ function ChatApp() {
     [activeConversationId, conversations],
   )
 
+  useEffect(() => () => {
+    revokeAttachmentPreview(selectedAttachment)
+  }, [selectedAttachment])
+
   const displayName = isSignedIn
     ? user?.firstName || user?.fullName || user?.primaryEmailAddress?.emailAddress?.split('@')[0] || 'there'
     : 'there'
@@ -563,16 +714,15 @@ function ChatApp() {
 
   const submitMessage = async () => {
     const trimmed = input.trim()
-    const serializedAttachments = selectedAttachments.map(({ file: _file, ...attachment }) => attachment)
-    const fallbackAttachmentMessage =
-      serializedAttachments.length > 0
-        ? `Attached file${serializedAttachments.length === 1 ? '' : 's'}: ${serializedAttachments
-            .map((attachment) => attachment.name)
-            .join(', ')}`
-        : ''
+    const serializedAttachment = selectedAttachment
+      ? (({ file: _file, previewUrl: _previewUrl, ...attachment }) => attachment)(selectedAttachment)
+      : null
+    const fallbackAttachmentMessage = serializedAttachment
+      ? `Attached file: ${serializedAttachment.name}`
+      : ''
     const messageToSend = trimmed || fallbackAttachmentMessage
 
-    if ((!messageToSend && !serializedAttachments.length) || isSending || isGuestBlocked) return
+    if ((!messageToSend && !serializedAttachment) || isSending || isGuestBlocked) return
 
     const currentUserId = user?.id ?? 'guest'
     const existingConversation = activeConversation
@@ -586,7 +736,7 @@ function ChatApp() {
       role: 'user',
       content: trimmed,
       timestamp: new Date().toISOString(),
-      attachments: serializedAttachments,
+      attachments: serializedAttachment ? [serializedAttachment] : undefined,
     }
 
     const typingMessage: ChatMessage = {
@@ -613,7 +763,7 @@ function ChatApp() {
     })
     setMessages((current) => [...current.filter((message) => !message.isTyping), userMessage, typingMessage])
     setInput('')
-    setSelectedAttachments([])
+    setSelectedAttachment(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -623,6 +773,7 @@ function ChatApp() {
     }
 
     try {
+      const fileData = selectedAttachment ? await fileToBase64(selectedAttachment.file) : undefined
       const response = await fetch(SEND_WEBHOOK, {
         method: 'POST',
         headers: {
@@ -632,7 +783,13 @@ function ChatApp() {
           userId: currentUserId,
           sessionId: currentConversationId,
           message: messageToSend,
-          attachments: serializedAttachments,
+          ...(selectedAttachment
+            ? {
+                fileData,
+                fileType: selectedAttachment.type,
+                fileName: selectedAttachment.name,
+              }
+            : {}),
         }),
       })
 
@@ -716,7 +873,8 @@ function ChatApp() {
     setMessages([])
     setChatError('')
     setInput('')
-    setSelectedAttachments([])
+    revokeAttachmentPreview(selectedAttachment)
+    setSelectedAttachment(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ''
     }
@@ -727,37 +885,46 @@ function ChatApp() {
   }
 
   const handleAttachmentSelection = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files ?? [])
-    if (!files.length) return
+    const file = event.target.files?.[0]
+    if (!file) return
 
-    setSelectedAttachments((current) => {
-      const seen = new Set(current.map((attachment) => `${attachment.name}:${attachment.size}:${attachment.file.lastModified}`))
-      const nextAttachments = [...current]
+    if (!isAllowedAttachment(file)) {
+      setChatError('Unsupported file type. Use JPG, PNG, GIF, WEBP, PDF, TXT, or DOCX.')
+      event.target.value = ''
+      return
+    }
 
-      files.forEach((file) => {
-        const fingerprint = `${file.name}:${file.size}:${file.lastModified}`
-        if (seen.has(fingerprint)) return
+    const normalizedType = normalizeAttachmentType(file)
+    const nextAttachment: ComposerAttachment = {
+      id: crypto.randomUUID(),
+      name: file.name,
+      size: file.size,
+      type: normalizedType,
+      kind: getAttachmentKind({ name: file.name, type: normalizedType }),
+      extension: getFileExtension(file.name),
+      file,
+      previewUrl: getAttachmentKind({ name: file.name, type: normalizedType }) === 'image'
+        ? URL.createObjectURL(file)
+        : undefined,
+    }
 
-        seen.add(fingerprint)
-        nextAttachments.push({
-          id: crypto.randomUUID(),
-          name: file.name,
-          size: file.size,
-          type: file.type,
-          file,
-        })
-      })
-
-      return nextAttachments
+    setChatError('')
+    setSelectedAttachment((current) => {
+      revokeAttachmentPreview(current)
+      return nextAttachment
     })
 
     event.target.value = ''
   }
 
-  const handleRemoveAttachment = (attachmentId: string) => {
-    setSelectedAttachments((current) =>
-      current.filter((attachment) => attachment.id !== attachmentId),
-    )
+  const handleRemoveAttachment = () => {
+    setSelectedAttachment((current) => {
+      revokeAttachmentPreview(current)
+      return null
+    })
+    if (fileInputRef.current) {
+      fileInputRef.current.value = ''
+    }
   }
 
   const handleToggleSidebar = () => {
@@ -916,13 +1083,13 @@ function ChatApp() {
                   ref={fileInputRef}
                   className="composer-file-input"
                   type="file"
-                  multiple
+                  accept={ATTACHMENT_ACCEPT}
                   onChange={handleAttachmentSelection}
                   disabled={isGuestBlocked}
                 />
-                {selectedAttachments.length ? (
-                  <AttachmentList
-                    attachments={selectedAttachments}
+                {selectedAttachment ? (
+                  <AttachmentPreview
+                    attachment={selectedAttachment}
                     onRemove={handleRemoveAttachment}
                   />
                 ) : null}
@@ -961,7 +1128,7 @@ function ChatApp() {
                     <button
                       className="composer-send"
                       type="submit"
-                      disabled={isSending || (!input.trim() && !selectedAttachments.length) || isGuestBlocked}
+                      disabled={isSending || (!input.trim() && !selectedAttachment) || isGuestBlocked}
                       aria-label="Send message"
                     >
                       ↑
