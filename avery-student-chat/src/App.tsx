@@ -192,6 +192,7 @@ function ChatApp() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [lastExpandedSidebarWidth, setLastExpandedSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const messagesScrollRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -411,6 +412,20 @@ function ChatApp() {
     const nextHeight = Math.min(textarea.scrollHeight, 180)
     textarea.style.height = `${Math.max(nextHeight, 52)}px`
   }, [input, showGreetingState])
+
+  useEffect(() => {
+    const scrollFrame = window.requestAnimationFrame(() => {
+      const messagesScroll = messagesScrollRef.current
+      if (!messagesScroll) return
+
+      messagesScroll.scrollTo({
+        top: messagesScroll.scrollHeight,
+        behavior: messages.length > 0 ? 'smooth' : 'auto',
+      })
+    })
+
+    return () => window.cancelAnimationFrame(scrollFrame)
+  }, [activeConversationId, messages])
 
   const activeConversation = useMemo(
     () => conversations.find((conversation: Conversation) => conversation.id === activeConversationId),
@@ -737,45 +752,49 @@ function ChatApp() {
         </aside>
 
         <main className="chat-stage">
-          <div className="top-bar">
+          <header className="top-bar">
             <div className="top-pill">
               <AveryLogo className="pill-logo" />
               <span>Avery</span>
             </div>
             <AuthActions />
-          </div>
+          </header>
 
-          {showGreetingState ? (
-            <section className="welcome-stage">
-              <div className="hero-mark-row">
-                <AveryLogo className="hero-logo" />
-                <h2>{getGreeting(displayName)}</h2>
-              </div>
-              <p>What shall we think through?</p>
-            </section>
-          ) : (
-            <section className="messages-stage">
-              {messages.map((message) => (
-                <article
-                  key={message.id}
-                  className={`chat-turn ${message.role === 'user' ? 'user' : 'assistant'}`}
-                >
-                  {message.role === 'assistant' && <AveryLogo className="turn-logo" />}
-                  <div className={`message-bubble ${message.isTyping ? 'typing-bubble' : ''}`}>
-                    {message.isTyping ? (
-                      <div className="typing-indicator" aria-label="Avery is typing">
-                        <span />
-                        <span />
-                        <span />
-                      </div>
-                    ) : (
-                      <ChatMessageContent message={message} />
-                    )}
+          <section className="chat-body">
+            <div className="messages-scroll" ref={messagesScrollRef}>
+              {showGreetingState ? (
+                <section className="welcome-stage">
+                  <div className="hero-mark-row">
+                    <AveryLogo className="hero-logo" />
+                    <h2>{getGreeting(displayName)}</h2>
                   </div>
-                </article>
-              ))}
-            </section>
-          )}
+                  <p>What shall we think through?</p>
+                </section>
+              ) : (
+                <section className="messages-stage">
+                  {messages.map((message) => (
+                    <article
+                      key={message.id}
+                      className={`chat-turn ${message.role === 'user' ? 'user' : 'assistant'}`}
+                    >
+                      {message.role === 'assistant' && <AveryLogo className="turn-logo" />}
+                      <div className={`message-bubble ${message.isTyping ? 'typing-bubble' : ''}`}>
+                        {message.isTyping ? (
+                          <div className="typing-indicator" aria-label="Avery is typing">
+                            <span />
+                            <span />
+                            <span />
+                          </div>
+                        ) : (
+                          <ChatMessageContent message={message} />
+                        )}
+                      </div>
+                    </article>
+                  ))}
+                </section>
+              )}
+            </div>
+          </section>
 
           <footer className={`composer-wrap ${showGreetingState ? 'composer-wrap-centered' : ''}`}>
             {chatError && <p className="status-text error-text">{chatError}</p>}
