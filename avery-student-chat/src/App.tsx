@@ -29,9 +29,9 @@ type HistoryApiItem = {
 }
 
 const SEND_WEBHOOK =
-  'https://n8n.srv992844.hstgr.cloud/webhook-test/6bf7d352-c215-45e7-9f86-48501286eaaf'
+  'https://n8n.srv992844.hstgr.cloud/webhook/6bf7d352-c215-45e7-9f86-48501286eaaf'
 const HISTORY_WEBHOOK =
-  'https://n8n.srv992844.hstgr.cloud/webhook-test/7c20958b-2f6e-4c02-bd31-40cb19349179'
+  'https://n8n.srv992844.hstgr.cloud/webhook/7c20958b-2f6e-4c02-bd31-40cb19349179'
 const USER_ID = 'user123'
 
 const starterConversations: Conversation[] = [
