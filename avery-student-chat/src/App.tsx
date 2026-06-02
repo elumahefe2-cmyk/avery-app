@@ -12,6 +12,7 @@ import {
   UserButton,
   useUser,
 } from '@clerk/clerk-react'
+import { uploadAttachmentToFirebase } from './firebase'
 import './App.css'
 
 type ChatMessage = {
@@ -250,29 +251,6 @@ function revokeAttachmentPreview(attachment: ComposerAttachment | null) {
   if (attachment?.previewUrl?.startsWith('blob:')) {
     URL.revokeObjectURL(attachment.previewUrl)
   }
-}
-
-async function fileToBase64(file: File) {
-  const dataUrl = await new Promise<string>((resolve, reject) => {
-    const reader = new FileReader()
-
-    reader.onload = () => {
-      if (typeof reader.result === 'string') {
-        resolve(reader.result)
-        return
-      }
-
-      reject(new Error('Could not read attachment as base64.'))
-    }
-
-    reader.onerror = () => {
-      reject(reader.error ?? new Error('Could not read attachment as base64.'))
-    }
-
-    reader.readAsDataURL(file)
-  })
-
-  return dataUrl.split(',')[1] ?? ''
 }
 
 function FileTypeIcon({ attachment }: { attachment: Pick<ChatAttachment, 'kind' | 'extension' | 'type'> }) {
@@ -727,6 +705,7 @@ function ChatApp() {
     const currentUserId = user?.id ?? 'guest'
     const existingConversation = activeConversation
     const currentConversationId = activeConversationId ?? crypto.randomUUID()
+    const activeAttachment = selectedAttachment
 
     setChatError('')
     setIsSending(true)
@@ -773,7 +752,9 @@ function ChatApp() {
     }
 
     try {
-      const fileData = selectedAttachment ? await fileToBase64(selectedAttachment.file) : undefined
+      const uploadedAttachment = activeAttachment
+        ? await uploadAttachmentToFirebase(activeAttachment.file, currentUserId, activeAttachment.type)
+        : null
       const response = await fetch(SEND_WEBHOOK, {
         method: 'POST',
         headers: {
@@ -783,11 +764,11 @@ function ChatApp() {
           userId: currentUserId,
           sessionId: currentConversationId,
           message: messageToSend,
-          ...(selectedAttachment
+          ...(uploadedAttachment
             ? {
-                fileData,
-                fileType: selectedAttachment.type,
-                fileName: selectedAttachment.name,
+                fileUrl: uploadedAttachment.fileUrl,
+                fileType: uploadedAttachment.fileType,
+                fileName: uploadedAttachment.fileName,
               }
             : {}),
         }),
