@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent, PointerEvent as ReactPointerEvent } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -12,7 +12,7 @@ import {
   UserButton,
   useUser,
 } from '@clerk/clerk-react'
-import { uploadAttachmentToFirebase } from './firebase'
+import { uploadAttachmentToCloudinary } from './cloudinary'
 import './App.css'
 
 type ChatMessage = {
@@ -90,6 +90,65 @@ const FILE_MIME_TYPES = new Set([
 ])
 const ALLOWED_ATTACHMENT_EXTENSIONS = new Set(['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf', 'txt', 'docx'])
 const ATTACHMENT_ACCEPT = '.jpg,.jpeg,.png,.gif,.webp,.pdf,.txt,.docx,image/jpeg,image/png,image/gif,image/webp,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+
+function getStoredGuestMessageCount() {
+  if (typeof window === 'undefined') return 0
+
+  const storedCount = Number(window.localStorage.getItem(GUEST_STORAGE_KEY) ?? '0')
+  return Number.isFinite(storedCount) ? storedCount : 0
+}
+
+function getStoredActiveConversationId() {
+  if (typeof window === 'undefined') return null
+  return window.localStorage.getItem(ACTIVE_CONVERSATION_STORAGE_KEY)
+}
+
+function getStoredDraftState(activeConversationId: string | null) {
+  if (typeof window === 'undefined') {
+    return {
+      conversations: [] as Conversation[],
+      messages: [] as ChatMessage[],
+    }
+  }
+
+  const savedDrafts = window.localStorage.getItem(DRAFT_CONVERSATIONS_STORAGE_KEY)
+  if (!savedDrafts) {
+    return {
+      conversations: [] as Conversation[],
+      messages: [] as ChatMessage[],
+    }
+  }
+
+  try {
+    const conversations = JSON.parse(savedDrafts) as Conversation[]
+    const activeDraft = conversations.find((conversation: Conversation) => conversation.id === activeConversationId)
+
+    return {
+      conversations,
+      messages: activeDraft?.messages ?? [],
+    }
+  } catch (error) {
+    console.error('Failed to parse saved draft conversations', error)
+    return {
+      conversations: [] as Conversation[],
+      messages: [] as ChatMessage[],
+    }
+  }
+}
+
+function getStoredSidebarWidth() {
+  if (typeof window === 'undefined') return SIDEBAR_DEFAULT_WIDTH
+
+  const savedSidebarWidth = Number(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) ?? SIDEBAR_DEFAULT_WIDTH)
+  return Number.isFinite(savedSidebarWidth)
+    ? clampSidebarWidth(savedSidebarWidth)
+    : SIDEBAR_DEFAULT_WIDTH
+}
+
+function getStoredSidebarCollapsed() {
+  if (typeof window === 'undefined') return false
+  return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true'
+}
 
 function getGreeting(name: string) {
   const hour = new Date().getHours()
@@ -265,9 +324,13 @@ function FileTypeIcon({ attachment }: { attachment: Pick<ChatAttachment, 'kind' 
 
 function AttachmentPreview({
   attachment,
+  isUploading = false,
+  uploadProgress = 0,
   onRemove,
 }: {
   attachment: ComposerAttachment
+  isUploading?: boolean
+  uploadProgress?: number
   onRemove: () => void
 }) {
   return (
@@ -290,6 +353,7 @@ function AttachmentPreview({
             className="attachment-remove"
             type="button"
             onClick={onRemove}
+            disabled={isUploading}
             aria-label={`Remove ${attachment.name}`}
           >
             ×
@@ -299,6 +363,17 @@ function AttachmentPreview({
           <span className="attachment-size">{formatFileSize(attachment.size)}</span>
           <span className="attachment-type">{getAttachmentTypeLabel(attachment)}</span>
         </div>
+        {isUploading ? (
+          <div className="attachment-upload-progress" aria-live="polite">
+            <div className="attachment-upload-progress-line">
+              <span>Uploading to Cloudinary</span>
+              <span>{uploadProgress}%</span>
+            </div>
+            <div className="attachment-upload-progress-track" aria-hidden="true">
+              <span style={{ width: `${uploadProgress}%` }} />
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   )
@@ -359,57 +434,29 @@ function ChatMessageContent({ message }: { message: ChatMessage }) {
 
 function ChatApp() {
   const { user, isSignedIn } = useUser()
+  const initialActiveConversationId = useMemo(() => getStoredActiveConversationId(), [])
+  const initialDraftState = useMemo(
+    () => getStoredDraftState(initialActiveConversationId),
+    [initialActiveConversationId],
+  )
+  const initialSidebarWidth = useMemo(() => getStoredSidebarWidth(), [])
+  const initialSidebarCollapsed = useMemo(() => getStoredSidebarCollapsed(), [])
   const [isSending, setIsSending] = useState(false)
   const [input, setInput] = useState('')
   const [chatError, setChatError] = useState('')
   const [historyError, setHistoryError] = useState('')
-  const [conversations, setConversations] = useState<Conversation[]>([])
-  const [messages, setMessages] = useState<ChatMessage[]>([])
-  const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
-  const [guestMessageCount, setGuestMessageCount] = useState(0)
-  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-  const [lastExpandedSidebarWidth, setLastExpandedSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH)
+  const [conversations, setConversations] = useState<Conversation[]>(() => initialDraftState.conversations)
+  const [messages, setMessages] = useState<ChatMessage[]>(() => initialDraftState.messages)
+  const [activeConversationId, setActiveConversationId] = useState<string | null>(initialActiveConversationId)
+  const [guestMessageCount, setGuestMessageCount] = useState(() => getStoredGuestMessageCount())
+  const [sidebarWidth, setSidebarWidth] = useState(initialSidebarWidth)
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(initialSidebarCollapsed)
+  const [lastExpandedSidebarWidth, setLastExpandedSidebarWidth] = useState(initialSidebarWidth)
   const [selectedAttachment, setSelectedAttachment] = useState<ComposerAttachment | null>(null)
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const messagesScrollRef = useRef<HTMLDivElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const storedCount = Number(window.localStorage.getItem(GUEST_STORAGE_KEY) ?? '0')
-    setGuestMessageCount(Number.isFinite(storedCount) ? storedCount : 0)
-
-    const savedConversationId = window.localStorage.getItem(ACTIVE_CONVERSATION_STORAGE_KEY)
-    if (savedConversationId) {
-      setActiveConversationId(savedConversationId)
-    }
-
-    const savedDrafts = window.localStorage.getItem(DRAFT_CONVERSATIONS_STORAGE_KEY)
-    if (savedDrafts) {
-      try {
-        const parsed = JSON.parse(savedDrafts) as Conversation[]
-        setConversations(parsed)
-        const activeDraft = parsed.find((conversation: Conversation) => conversation.id === savedConversationId)
-        if (activeDraft?.messages) {
-          setMessages(activeDraft.messages)
-        }
-      } catch (error) {
-        console.error('Failed to parse saved draft conversations', error)
-      }
-    }
-
-    const savedSidebarWidth = Number(window.localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY) ?? SIDEBAR_DEFAULT_WIDTH)
-    const normalizedWidth = Number.isFinite(savedSidebarWidth)
-      ? clampSidebarWidth(savedSidebarWidth)
-      : SIDEBAR_DEFAULT_WIDTH
-    setSidebarWidth(normalizedWidth)
-    setLastExpandedSidebarWidth(normalizedWidth)
-
-    const savedCollapsed = window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true'
-    setIsSidebarCollapsed(savedCollapsed)
-  }, [])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -446,11 +493,10 @@ function ChatApp() {
   useEffect(() => {
     if (!isSignedIn || typeof window === 'undefined') return
 
-    setGuestMessageCount(0)
     window.localStorage.removeItem(GUEST_STORAGE_KEY)
   }, [isSignedIn])
 
-  const loadConversation = async (conversationId: string) => {
+  const loadConversation = useCallback(async (conversationId: string) => {
     const existingConversation = conversations.find((conversation: Conversation) => conversation.id === conversationId)
     if (existingConversation?.messages?.length) {
       setActiveConversationId(conversationId)
@@ -504,7 +550,7 @@ function ChatApp() {
       console.error(error)
       setHistoryError('Could not load that conversation.')
     }
-  }
+  }, [conversations, user])
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -577,10 +623,8 @@ function ChatApp() {
 
     if (isSignedIn) {
       void fetchHistory()
-    } else {
-      setHistoryError('')
     }
-  }, [user?.id, isSignedIn])
+  }, [activeConversationId, isSignedIn, loadConversation, user?.id])
 
   const showGreetingState = messages.length === 0
   const isGuestBlocked = !isSignedIn && guestMessageCount >= GUEST_LIMIT
@@ -693,7 +737,14 @@ function ChatApp() {
   const submitMessage = async () => {
     const trimmed = input.trim()
     const serializedAttachment = selectedAttachment
-      ? (({ file: _file, previewUrl: _previewUrl, ...attachment }) => attachment)(selectedAttachment)
+      ? {
+          id: selectedAttachment.id,
+          name: selectedAttachment.name,
+          size: selectedAttachment.size,
+          type: selectedAttachment.type,
+          kind: selectedAttachment.kind,
+          extension: selectedAttachment.extension,
+        }
       : null
     const fallbackAttachmentMessage = serializedAttachment
       ? `Attached file: ${serializedAttachment.name}`
@@ -709,6 +760,7 @@ function ChatApp() {
 
     setChatError('')
     setIsSending(true)
+    setUploadProgress(activeAttachment ? 0 : null)
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
@@ -753,7 +805,11 @@ function ChatApp() {
 
     try {
       const uploadedAttachment = activeAttachment
-        ? await uploadAttachmentToFirebase(activeAttachment.file, currentUserId, activeAttachment.type)
+        ? await uploadAttachmentToCloudinary({
+            file: activeAttachment.file,
+            fileType: activeAttachment.type,
+            onProgress: setUploadProgress,
+          })
         : null
       const response = await fetch(SEND_WEBHOOK, {
         method: 'POST',
@@ -766,7 +822,7 @@ function ChatApp() {
           message: messageToSend,
           ...(uploadedAttachment
             ? {
-                fileUrl: uploadedAttachment.fileUrl,
+                fileUrl: uploadedAttachment.secureUrl,
                 fileType: uploadedAttachment.fileType,
                 fileName: uploadedAttachment.fileName,
               }
@@ -833,6 +889,7 @@ function ChatApp() {
       }
       setChatError('Something went wrong while contacting Avery. Please try again.')
     } finally {
+      setUploadProgress(null)
       setIsSending(false)
     }
   }
@@ -1071,6 +1128,8 @@ function ChatApp() {
                 {selectedAttachment ? (
                   <AttachmentPreview
                     attachment={selectedAttachment}
+                    isUploading={isSending && uploadProgress !== null}
+                    uploadProgress={uploadProgress ?? 0}
                     onRemove={handleRemoveAttachment}
                   />
                 ) : null}
@@ -1095,7 +1154,7 @@ function ChatApp() {
                     type="button"
                     aria-label="Add attachment"
                     onClick={handleAttachmentButtonClick}
-                    disabled={isGuestBlocked}
+                    disabled={isGuestBlocked || isSending}
                   >
                     +
                   </button>

@@ -663,6 +663,36 @@ button {
   justify-content: flex-start;
 }
 
+.attachment-upload-progress {
+  display: grid;
+  gap: 6px;
+}
+
+.attachment-upload-progress-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.74rem;
+  color: #9b9da1;
+}
+
+.attachment-upload-progress-track {
+  width: 100%;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.attachment-upload-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #7fd0ff, #f5f5f5);
+  transition: width 140ms ease;
+}
+
 .attachment-chip {
   display: inline-flex;
   align-items: center;
@@ -822,6 +852,11 @@ button {
 .composer-plus:hover:not(:disabled),
 .attachment-remove:hover {
   background: rgba(255, 255, 255, 0.08);
+}
+
+.attachment-remove:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .composer-plus:active:not(:disabled),
