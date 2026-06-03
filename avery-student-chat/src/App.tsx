@@ -12,7 +12,7 @@ import {
   UserButton,
   useUser,
 } from '@clerk/clerk-react'
-import { uploadAttachmentToCloudinary } from './cloudinary'
+import { uploadAttachmentToSupabase } from './supabase'
 import './App.css'
 
 type ChatMessage = {
@@ -366,7 +366,7 @@ function AttachmentPreview({
         {isUploading ? (
           <div className="attachment-upload-progress" aria-live="polite">
             <div className="attachment-upload-progress-line">
-              <span>Uploading to Cloudinary</span>
+              <span>Uploading file</span>
               <span>{uploadProgress}%</span>
             </div>
             <div className="attachment-upload-progress-track" aria-hidden="true">
@@ -805,8 +805,9 @@ function ChatApp() {
 
     try {
       const uploadedAttachment = activeAttachment
-        ? await uploadAttachmentToCloudinary({
+        ? await uploadAttachmentToSupabase({
             file: activeAttachment.file,
+            userId: currentUserId,
             fileType: activeAttachment.type,
             onProgress: setUploadProgress,
           })
@@ -822,7 +823,7 @@ function ChatApp() {
           message: messageToSend,
           ...(uploadedAttachment
             ? {
-                fileUrl: uploadedAttachment.secureUrl,
+                fileUrl: uploadedAttachment.fileUrl,
                 fileType: uploadedAttachment.fileType,
                 fileName: uploadedAttachment.fileName,
               }
