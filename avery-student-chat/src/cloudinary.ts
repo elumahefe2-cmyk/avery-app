@@ -40,7 +40,15 @@ export function uploadAttachmentToCloudinary({
 
     request.addEventListener('load', () => {
       if (request.status < 200 || request.status >= 300) {
-        reject(new Error('Cloudinary upload failed.'))
+        try {
+          const payload = JSON.parse(request.responseText) as {
+            error?: { message?: string }
+          }
+          const errorMessage = payload.error?.message?.trim()
+          reject(new Error(errorMessage || 'Cloudinary upload failed.'))
+        } catch {
+          reject(new Error('Cloudinary upload failed.'))
+        }
         return
       }
 

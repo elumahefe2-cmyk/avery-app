@@ -883,11 +883,41 @@ function ChatApp() {
       }
     } catch (error) {
       console.error(error)
-      setMessages((current) => current.filter((message) => message.id !== TYPING_MESSAGE_ID))
+      setMessages((current) =>
+        current.filter((message) => (
+          message.id !== TYPING_MESSAGE_ID &&
+          message.id !== userMessage.id
+        )),
+      )
+      setConversations((current) =>
+        current.flatMap((conversation: Conversation) => {
+          if (conversation.id !== currentConversationId) {
+            return [conversation]
+          }
+
+          const remainingMessages = (conversation.messages ?? []).filter((message) => (
+            message.id !== TYPING_MESSAGE_ID &&
+            message.id !== userMessage.id
+          ))
+
+          if (remainingMessages.length === 0 && !existingConversation) {
+            return []
+          }
+
+          return [{
+            ...conversation,
+            messages: remainingMessages,
+          }]
+        }),
+      )
+      setInput(trimmed)
+      if (activeAttachment) {
+        setSelectedAttachment(activeAttachment)
+      }
       if (!isSignedIn) {
         setGuestMessageCount((current) => Math.max(0, current - 1))
       }
-      setChatError('Something went wrong while contacting Avery. Please try again.')
+      setChatError(error instanceof Error ? error.message : 'Something went wrong while contacting Avery. Please try again.')
     } finally {
       setUploadProgress(null)
       setIsSending(false)
