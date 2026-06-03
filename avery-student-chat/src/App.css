@@ -335,8 +335,16 @@ button {
   gap: 10px;
 }
 
+.top-bar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .auth-ghost-button,
-.auth-solid-button {
+.auth-solid-button,
+.share-button,
+.share-copy-button {
   border-radius: 999px;
   padding: 8px 14px;
   font-size: 0.88rem;
@@ -351,6 +359,25 @@ button {
 .auth-solid-button {
   background: #f5f5f5;
   color: #111111;
+}
+
+.share-button {
+  background: #1a1b1d;
+  color: #f5f5f5;
+  border: 1px solid #2a2c30;
+  transition: background 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.share-button:hover:not(:disabled),
+.share-copy-button:hover:not(:disabled) {
+  background: #212326;
+  border-color: #34373c;
+}
+
+.share-button:disabled,
+.share-copy-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .pill-logo {
@@ -910,6 +937,98 @@ button {
   z-index: 1000;
 }
 
+.share-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  z-index: 1100;
+}
+
+.share-dialog {
+  width: min(100%, 620px);
+  padding: 24px;
+  border-radius: 24px;
+  background: #151515;
+  border: 1px solid #2b2b2b;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+}
+
+.share-dialog-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.share-dialog-header h3 {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.share-dialog-close {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: #1d1f24;
+  color: #f5f5f5;
+  font-size: 1.2rem;
+}
+
+.share-dialog-copy {
+  margin: 14px 0 0;
+  color: #b0b0b0;
+  font-size: 0.94rem;
+  line-height: 1.6;
+}
+
+.share-link-row {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+}
+
+.share-link-input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #2a2c30;
+  border-radius: 16px;
+  background: #101113;
+  color: #f5f5f5;
+  padding: 13px 15px;
+  font: inherit;
+}
+
+.share-copy-button {
+  background: #f5f5f5;
+  color: #111111;
+  border: 1px solid transparent;
+}
+
+.share-dialog-error {
+  margin-top: 12px;
+}
+
+.share-toast {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  padding: 11px 14px;
+  border-radius: 999px;
+  background: #f5f5f5;
+  color: #111111;
+  font-size: 0.88rem;
+  font-weight: 700;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.32);
+  z-index: 1200;
+}
+
 .guest-limit-modal {
   width: min(100%, 440px);
   padding: 28px;
@@ -938,6 +1057,46 @@ button {
   justify-content: center;
   gap: 12px;
   margin-top: 22px;
+}
+
+.shared-shell {
+  min-height: 100dvh;
+  background: #0f0f10;
+  color: #f5f5f5;
+  padding: 18px 20px 28px;
+}
+
+.shared-topbar {
+  width: min(880px, 100%);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-bottom: 18px;
+}
+
+.shared-body {
+  width: min(880px, 100%);
+  margin: 0 auto;
+}
+
+.shared-messages-stage {
+  padding-top: 10px;
+  justify-content: flex-start;
+}
+
+.shared-state-card {
+  margin: 60px auto 0;
+  width: min(100%, 760px);
+  padding: 22px 24px;
+  border-radius: 22px;
+  border: 1px solid #25272b;
+  background: #141516;
+}
+
+.shared-state-card p {
+  margin: 0;
+  line-height: 1.6;
 }
 
 @keyframes message-in {
@@ -1000,6 +1159,12 @@ button {
   .top-bar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .top-bar-actions {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
   }
 
   .hero-mark-row {
@@ -1066,5 +1231,24 @@ button {
 
   .guest-limit-actions {
     flex-direction: column;
+  }
+
+  .share-link-row {
+    grid-template-columns: 1fr;
+  }
+
+  .share-copy-button {
+    width: 100%;
+  }
+
+  .share-toast {
+    right: 14px;
+    left: 14px;
+    bottom: 14px;
+    text-align: center;
+  }
+
+  .shared-shell {
+    padding: 14px 14px 24px;
   }
 }

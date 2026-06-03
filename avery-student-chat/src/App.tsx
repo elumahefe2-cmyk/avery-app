@@ -12,7 +12,7 @@ import {
   UserButton,
   useUser,
 } from '@clerk/clerk-react'
-import { uploadAttachmentToSupabase } from './supabase'
+import { createSharedChat, fetchSharedChat, uploadAttachmentToSupabase } from './supabase'
 import './App.css'
 
 type ChatMessage = {
@@ -148,6 +148,13 @@ function getStoredSidebarWidth() {
 function getStoredSidebarCollapsed() {
   if (typeof window === 'undefined') return false
   return window.localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === 'true'
+}
+
+function getShareConversationIdFromLocation() {
+  if (typeof window === 'undefined') return null
+
+  const match = window.location.pathname.match(/^\/share\/([^/]+)\/?$/)
+  return match?.[1] ? decodeURIComponent(match[1]) : null
 }
 
 function getGreeting(name: string) {
@@ -432,6 +439,134 @@ function ChatMessageContent({ message }: { message: ChatMessage }) {
   )
 }
 
+function ShareDialog({
+  link,
+  error,
+  onClose,
+  onCopy,
+}: {
+  link: string
+  error: string
+  onClose: () => void
+  onCopy: () => void
+}) {
+  return (
+    <div className="share-dialog-overlay">
+      <div className="share-dialog" role="dialog" aria-modal="true" aria-labelledby="share-dialog-title">
+        <div className="share-dialog-header">
+          <div>
+            <p className="sidebar-label">Avery</p>
+            <h3 id="share-dialog-title">Share conversation</h3>
+          </div>
+          <button className="share-dialog-close" type="button" onClick={onClose} aria-label="Close share dialog">
+            ×
+          </button>
+        </div>
+        <p className="share-dialog-copy">
+          Anyone with this link can open a read-only version of this conversation.
+        </p>
+        <div className="share-link-row">
+          <input className="share-link-input" type="text" value={link} readOnly aria-label="Share link" />
+          <button className="share-copy-button" type="button" onClick={onCopy}>
+            Copy link
+          </button>
+        </div>
+        {error ? <p className="status-text error-text share-dialog-error">{error}</p> : null}
+      </div>
+    </div>
+  )
+}
+
+function SharedConversationPage({ shareId }: { shareId: string }) {
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'auto'
+
+    return () => {
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
+
+  useEffect(() => {
+    let isCancelled = false
+
+    const loadSharedConversation = async () => {
+      setIsLoading(true)
+      setError('')
+
+      try {
+        const sharedChat = await fetchSharedChat(shareId)
+        if (!sharedChat) {
+          throw new Error('This shared conversation could not be found.')
+        }
+
+        if (!isCancelled) {
+          setMessages(sharedChat.messages ?? [])
+        }
+      } catch (loadError) {
+        if (!isCancelled) {
+          setError(loadError instanceof Error ? loadError.message : 'Could not load shared conversation.')
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    void loadSharedConversation()
+
+    return () => {
+      isCancelled = true
+    }
+  }, [shareId])
+
+  return (
+    <main className="shared-shell">
+      <header className="shared-topbar">
+        <div className="top-pill">
+          <AveryLogo className="pill-logo" />
+          <span>Avery</span>
+        </div>
+      </header>
+
+      <section className="shared-body">
+        {isLoading ? (
+          <div className="shared-state-card">
+            <p>Loading shared conversation…</p>
+          </div>
+        ) : error ? (
+          <div className="shared-state-card">
+            <p className="error-text">{error}</p>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="shared-state-card">
+            <p>This shared conversation does not have any messages yet.</p>
+          </div>
+        ) : (
+          <section className="messages-stage shared-messages-stage">
+            {messages.map((message) => (
+              <article
+                key={message.id}
+                className={`chat-turn ${message.role === 'user' ? 'user' : 'assistant'}`}
+              >
+                {message.role === 'assistant' && <AveryLogo className="turn-logo" />}
+                <div className="message-bubble">
+                  <ChatMessageContent message={message} />
+                </div>
+              </article>
+            ))}
+          </section>
+        )}
+      </section>
+    </main>
+  )
+}
+
 function ChatApp() {
   const { user, isSignedIn } = useUser()
   const currentUserId = user?.id ?? null
@@ -455,6 +590,10 @@ function ChatApp() {
   const [lastExpandedSidebarWidth, setLastExpandedSidebarWidth] = useState(initialSidebarWidth)
   const [selectedAttachment, setSelectedAttachment] = useState<ComposerAttachment | null>(null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const [isSharing, setIsSharing] = useState(false)
+  const [shareDialogLink, setShareDialogLink] = useState('')
+  const [shareDialogError, setShareDialogError] = useState('')
+  const [isCopyToastVisible, setIsCopyToastVisible] = useState(false)
   const conversationsRef = useRef<Conversation[]>(initialDraftState.conversations)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const messagesScrollRef = useRef<HTMLDivElement | null>(null)
@@ -669,10 +808,24 @@ function ChatApp() {
     () => conversations.find((conversation: Conversation) => conversation.id === activeConversationId),
     [activeConversationId, conversations],
   )
+  const shouldShowShareButton = Boolean(activeConversationId || isSignedIn)
+  const canShareConversation = messages.some((message) => !message.isTyping)
 
   useEffect(() => () => {
     revokeAttachmentPreview(selectedAttachment)
   }, [selectedAttachment])
+
+  useEffect(() => {
+    if (!isCopyToastVisible) return undefined
+
+    const timeoutId = window.setTimeout(() => {
+      setIsCopyToastVisible(false)
+    }, 2200)
+
+    return () => {
+      window.clearTimeout(timeoutId)
+    }
+  }, [isCopyToastVisible])
 
   const displayName = isSignedIn
     ? user?.firstName || user?.fullName || user?.primaryEmailAddress?.emailAddress?.split('@')[0] || 'there'
@@ -745,6 +898,63 @@ function ChatApp() {
 
     const payload = await response.json()
     return extractTitleText(payload)
+  }
+
+  const serializeMessagesForShare = useCallback(() => (
+    messages
+      .filter((message) => !message.isTyping)
+      .map((message) => ({
+        id: message.id,
+        role: message.role,
+        content: message.content,
+        timestamp: message.timestamp,
+        ...(message.attachments?.length
+          ? {
+              attachments: message.attachments.map((attachment) => ({
+                id: attachment.id,
+                name: attachment.name,
+                size: attachment.size,
+                type: attachment.type,
+                kind: attachment.kind,
+                extension: attachment.extension,
+              })),
+            }
+          : {}),
+      }))
+  ), [messages])
+
+  const handleShareConversation = async () => {
+    const shareableMessages = serializeMessagesForShare()
+    if (!shareableMessages.length || isSharing) return
+
+    try {
+      setIsSharing(true)
+      setChatError('')
+      setShareDialogError('')
+      const shareId = await createSharedChat(shareableMessages)
+      const baseUrl = typeof window === 'undefined'
+        ? 'https://avery-student-chat.vercel.app'
+        : window.location.origin
+      setShareDialogLink(`${baseUrl}/share/${shareId}`)
+    } catch (error) {
+      console.error(error)
+      setChatError(error instanceof Error ? error.message : 'Could not create share link.')
+    } finally {
+      setIsSharing(false)
+    }
+  }
+
+  const handleCopyShareLink = async () => {
+    if (!shareDialogLink) return
+
+    try {
+      await navigator.clipboard.writeText(shareDialogLink)
+      setShareDialogError('')
+      setIsCopyToastVisible(true)
+    } catch (error) {
+      console.error(error)
+      setShareDialogError('Could not copy the share link automatically.')
+    }
   }
 
   const submitMessage = async () => {
@@ -1118,7 +1328,19 @@ function ChatApp() {
               <AveryLogo className="pill-logo" />
               <span>Avery</span>
             </div>
-            <AuthActions />
+            <div className="top-bar-actions">
+              {shouldShowShareButton ? (
+                <button
+                  className="share-button"
+                  type="button"
+                  onClick={handleShareConversation}
+                  disabled={!canShareConversation || isSharing}
+                >
+                  {isSharing ? 'Sharing…' : 'Share'}
+                </button>
+              ) : null}
+              <AuthActions />
+            </div>
           </header>
 
           <section className="chat-body">
@@ -1225,12 +1447,43 @@ function ChatApp() {
         </main>
       </div>
 
+      {shareDialogLink ? (
+        <ShareDialog
+          link={shareDialogLink}
+          error={shareDialogError}
+          onClose={() => {
+            setShareDialogLink('')
+            setShareDialogError('')
+          }}
+          onCopy={() => {
+            void handleCopyShareLink()
+          }}
+        />
+      ) : null}
+      {isCopyToastVisible ? <div className="share-toast">Link copied!</div> : null}
       {isGuestBlocked && <GuestLimitModal />}
     </>
   )
 }
 
 function App() {
+  const [shareId, setShareId] = useState(() => getShareConversationIdFromLocation())
+
+  useEffect(() => {
+    const handleLocationChange = () => {
+      setShareId(getShareConversationIdFromLocation())
+    }
+
+    window.addEventListener('popstate', handleLocationChange)
+    return () => {
+      window.removeEventListener('popstate', handleLocationChange)
+    }
+  }, [])
+
+  if (shareId) {
+    return <SharedConversationPage shareId={shareId} />
+  }
+
   return <ChatApp />
 }
 
