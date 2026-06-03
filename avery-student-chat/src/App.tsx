@@ -434,6 +434,7 @@ function ChatMessageContent({ message }: { message: ChatMessage }) {
 
 function ChatApp() {
   const { user, isSignedIn } = useUser()
+  const currentUserId = user?.id ?? null
   const initialActiveConversationId = useMemo(() => getStoredActiveConversationId(), [])
   const initialDraftState = useMemo(
     () => getStoredDraftState(initialActiveConversationId),
@@ -454,6 +455,7 @@ function ChatApp() {
   const [lastExpandedSidebarWidth, setLastExpandedSidebarWidth] = useState(initialSidebarWidth)
   const [selectedAttachment, setSelectedAttachment] = useState<ComposerAttachment | null>(null)
   const [uploadProgress, setUploadProgress] = useState<number | null>(null)
+  const conversationsRef = useRef<Conversation[]>(initialDraftState.conversations)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
   const messagesScrollRef = useRef<HTMLDivElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -481,6 +483,10 @@ function ChatApp() {
   }, [conversations])
 
   useEffect(() => {
+    conversationsRef.current = conversations
+  }, [conversations])
+
+  useEffect(() => {
     if (typeof window === 'undefined') return
     window.localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth))
   }, [sidebarWidth])
@@ -497,14 +503,14 @@ function ChatApp() {
   }, [isSignedIn])
 
   const loadConversation = useCallback(async (conversationId: string) => {
-    const existingConversation = conversations.find((conversation: Conversation) => conversation.id === conversationId)
+    const existingConversation = conversationsRef.current.find((conversation: Conversation) => conversation.id === conversationId)
     if (existingConversation?.messages?.length) {
       setActiveConversationId(conversationId)
       setMessages(existingConversation.messages)
       return
     }
 
-    if (!user?.id) {
+    if (!currentUserId) {
       setActiveConversationId(conversationId)
       setMessages([])
       return
@@ -518,7 +524,7 @@ function ChatApp() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          userId: user.id,
+          userId: currentUserId,
           sessionId: conversationId,
         }),
       })
@@ -550,11 +556,11 @@ function ChatApp() {
       console.error(error)
       setHistoryError('Could not load that conversation.')
     }
-  }, [conversations, user])
+  }, [currentUserId])
 
   useEffect(() => {
     const fetchHistory = async () => {
-      if (!user?.id) return
+      if (!currentUserId) return
 
       try {
         setHistoryError('')
@@ -565,7 +571,7 @@ function ChatApp() {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            userId: user.id,
+            userId: currentUserId,
           }),
         })
 
@@ -589,24 +595,31 @@ function ChatApp() {
           return
         }
 
+        const existingById = new Map(
+          conversationsRef.current.map((conversation: Conversation) => [conversation.id, conversation]),
+        )
         const mapped: Conversation[] = rawItems.reduce((accumulator: Conversation[], item: HistoryApiItem, index: number) => {
           const id = item.sessionId ?? item.id ?? `history-${index + 1}`
           if (accumulator.some((conversation: Conversation) => conversation.id === id)) {
             return accumulator
           }
 
+          const existingConversation = existingById.get(id)
           accumulator.push({
             id,
-            title: item.title ?? item.name ?? 'New chat',
-            updatedAt: item.updatedAt,
-            messages: item.messages ? normalizeMessages(item.messages) : undefined,
+            title: item.title ?? item.name ?? existingConversation?.title ?? 'New chat',
+            updatedAt: item.updatedAt ?? existingConversation?.updatedAt,
+            messages: item.messages ? normalizeMessages(item.messages) : existingConversation?.messages,
           })
           return accumulator
         }, [])
 
         setConversations(mapped)
 
-        const preferredId = activeConversationId ?? mapped[0]?.id ?? null
+        const storedActiveConversationId = getStoredActiveConversationId()
+        const preferredId = storedActiveConversationId && mapped.some((conversation: Conversation) => conversation.id === storedActiveConversationId)
+          ? storedActiveConversationId
+          : mapped[0]?.id ?? null
         if (preferredId) {
           const selectedConversation = mapped.find((conversation: Conversation) => conversation.id === preferredId)
           setActiveConversationId(preferredId)
@@ -624,7 +637,7 @@ function ChatApp() {
     if (isSignedIn) {
       void fetchHistory()
     }
-  }, [activeConversationId, isSignedIn, loadConversation, user?.id])
+  }, [currentUserId, isSignedIn, loadConversation])
 
   const showGreetingState = messages.length === 0
   const isGuestBlocked = !isSignedIn && guestMessageCount >= GUEST_LIMIT
@@ -1074,7 +1087,7 @@ function ChatApp() {
           </button>
 
           <div className="conversation-list">
-            {historyError && <span className="sidebar-error">{historyError}</span>}
+            {historyError && conversations.length === 0 && <span className="sidebar-error">{historyError}</span>}
             {conversations.map((conversation: Conversation) => (
               <button
                 key={conversation.id}
